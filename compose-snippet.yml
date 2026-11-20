@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+# Đoạn này GHÉP VÀO file /opt/garage/docker-compose.yml đã có sẵn trên roser.
+# Merge this service block into the existing /opt/garage/docker-compose.yml.
+#
+# Cách làm:
+#   1. Sao chép thư mục này lên server:  /opt/garage/admin-ui
+#      (thư mục chứa Dockerfile + thư mục app/)
+#   2. Mở /opt/garage/docker-compose.yml, thêm service "admin-ui" dưới
+#      service "garage" đã có (giữ nguyên phần garage, chỉ thêm mới).
+#   3. Trong /opt/garage, chạy:  docker compose up -d --build
+#   4. Mở:  http://100.85.120.39:3910
+#
+# Lưu ý: GARAGE_ADMIN_TOKEN lấy từ file .env của Garage trong /opt/garage
+# (biến này đã có sẵn trong file đó). KHÔNG ghi token thật vào file này.
+# ---------------------------------------------------------------------------
+services:
+  admin-ui:
+    build: ./admin-ui
+    container_name: garage-admin-ui
+    restart: unless-stopped
+    ports:
+      - "3910:8000"
+    environment:
+      GARAGE_ADMIN_URL: http://garage:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+      S3_ENDPOINT_URL: http://garage:3900
+      S3_REGION: garage
+      # Tùy chọn — điền sau khi đã tạo key bằng giao diện này hoặc bằng CLI.
+      # Nếu để trống, tab File sẽ hiện hướng dẫn tạo key.
+      # S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      # S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+    depends_on:
+      - garage

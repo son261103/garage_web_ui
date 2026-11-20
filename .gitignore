@@ -1,0 +1,23 @@
+# Bí mật — không bao giờ commit
+.env
+*.env
+app-key.txt
+*-key.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Node (nếu sau này thêm build frontend)
+node_modules/
+dist/
+
+# Hệ điều hành / biên tập viên
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
