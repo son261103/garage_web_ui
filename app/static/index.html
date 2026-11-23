@@ -11,8 +11,7 @@
     theme: {
       extend: {
         colors: {
-          primary: {50:'#fdf2f8',100:'#fce7f3',200:'#fbcfe8',300:'#f9a8d4',400:'#f472b6',500:'#ec4899',600:'#db2777',700:'#be185d'},
-          accent: {500:'#3b82f6',600:'#2563eb'}
+          primary: {50:'#fdf2f8',100:'#fce7f3',200:'#fbcfe8',300:'#f9a8d4',400:'#f472b6',500:'#ec4899',600:'#db2777',700:'#be185d'}
         },
         fontFamily: { sans: ['Inter','system-ui','-apple-system','Segoe UI','sans-serif'] }
       }
@@ -29,7 +28,7 @@
   <!-- Sidebar -->
   <aside class="hidden md:flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 h-screen">
     <div class="flex items-center gap-3 px-5 py-5">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white shadow-lg shadow-primary-500/30">
+      <div class="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-lg shadow-primary-500/30">
         <i data-lucide="database" class="w-5 h-5"></i>
       </div>
       <div>
@@ -42,6 +41,13 @@
       <div class="rounded-xl bg-primary-50 dark:bg-primary-500/10 border border-primary-100 dark:border-primary-500/20 p-3 text-xs leading-relaxed">
         <p class="font-semibold text-primary-700 dark:text-primary-300 flex items-center gap-1.5"><i data-lucide="shield-check" class="w-4 h-4"></i> Chỉ dùng qua Tailscale</p>
         <p class="text-slate-600 dark:text-slate-300 mt-1">Không mở cổng 3910 ra internet. Admin token chỉ nằm ở backend, không lộ ra trình duyệt.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 mt-3">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400 px-1 pb-2">Giao diện</p>
+        <div class="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
+          <button type="button" id="themeLight" class="theme-seg-btn"><i data-lucide="sun" class="w-4 h-4"></i>Sáng</button>
+          <button type="button" id="themeDark" class="theme-seg-btn"><i data-lucide="moon" class="w-4 h-4"></i>Tối</button>
+        </div>
       </div>
       <p class="text-[11px] text-slate-400 mt-3 text-center">Garage v2.4.1 &middot; Single-node &middot; roser</p>
     </div>
@@ -57,7 +63,7 @@
           <p id="pageSubtitle" class="text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">Tình trạng cluster, dung lượng và thống kê</p>
         </div>
         <span id="healthBadge" class="badge badge-muted"><span class="dot"></span> Đang kiểm tra…</span>
-        <button id="themeBtn" class="btn-icon" title="Đổi sáng / tối" aria-label="Đổi giao diện sáng tối"><i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i><i data-lucide="moon" class="w-5 h-5 dark:hidden"></i></button>
+        <button id="themeBtn" class="btn-icon md:hidden" title="Đổi sáng / tối" aria-label="Đổi giao diện sáng tối"><i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i><i data-lucide="moon" class="w-5 h-5 dark:hidden"></i></button>
         <button id="refreshBtn" class="btn-primary hidden sm:inline-flex"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Làm mới</button>
       </div>
       <nav id="mobileNav" class="md:hidden hidden px-4 pb-3 flex flex-wrap gap-2 text-sm"></nav>
@@ -76,7 +82,7 @@
               <span id="storageLabel" class="text-sm text-slate-500"></span>
             </div>
             <div class="h-4 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-              <div id="storageBar" class="h-full rounded-full bg-gradient-to-r from-primary-500 to-accent-500 transition-all" style="width:0%"></div>
+              <div id="storageBar" class="h-full rounded-full bg-primary-500 transition-all" style="width:0%"></div>
             </div>
             <p id="storageNote" class="text-sm text-slate-500 dark:text-slate-400 mt-3"></p>
             <div class="grid sm:grid-cols-3 gap-3 mt-4 text-sm" id="nodeCards"></div>

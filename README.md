@@ -2,8 +2,8 @@
 
 Giao diện web tự viết để quản trị Garage trên server `roser`, thay cho việc
 gõ lệnh CLI hay dùng garage-webui của bên thứ ba. Toàn bộ giao diện bằng
-tiếng Việt, màu chủ đạo hồng (`#ec4899`) + xanh dương (`#3b82f6`), có chế
-độ sáng / tối, dùng Tailwind CSS + component kiểu shadcn + icon Lucide.
+tiếng Việt, chỉ 1 màu chủ đạo hồng đặc sáng (`#ec4899`, KHÔNG gradient),
+có chế độ sáng / tối (chọn ở cuối sidebar), dùng Tailwind CSS + component kiểu shadcn + icon Lucide (logo dùng icon, không dùng ảnh).
 
 ![Giao diện](docs/screenshot-dashboard.png)
 > Ảnh chụp màn hình: thêm file `docs/screenshot-dashboard.png` sau khi chạy

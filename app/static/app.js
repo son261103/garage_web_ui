@@ -23,17 +23,29 @@ let confirmAction = null;
 let s3Configured = false;
 
 /* ---------- chủ đề sáng / tối ---------- */
+function syncThemeButtons() {
+  const dark = document.documentElement.classList.contains('dark');
+  const lightBtn = document.getElementById('themeLight');
+  const darkBtn = document.getElementById('themeDark');
+  if (lightBtn) lightBtn.classList.toggle('on', !dark);
+  if (darkBtn) darkBtn.classList.toggle('on', dark);
+}
+function setTheme(mode) {
+  const dark = mode === 'dark';
+  document.documentElement.classList.toggle('dark', dark);
+  localStorage.setItem('garage-ui-theme', dark ? 'dark' : 'light');
+  syncThemeButtons();
+  refreshIcons();
+}
 function initTheme() {
   const saved = localStorage.getItem('garage-ui-theme');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const dark = saved ? saved === 'dark' : prefersDark;
   document.documentElement.classList.toggle('dark', dark);
+  syncThemeButtons();
 }
 function toggleTheme() {
-  const dark = !document.documentElement.classList.contains('dark');
-  document.documentElement.classList.toggle('dark', dark);
-  localStorage.setItem('garage-ui-theme', dark ? 'dark' : 'light');
-  refreshIcons();
+  setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
 }
 
 /* ---------- tiện ích ---------- */
@@ -170,7 +182,7 @@ async function loadDashboard() {
     const pct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
     $('#statCards').innerHTML = [
       { icon: 'bucket', label: 'Bucket', value: t.buckets ?? 0, cls: 'bg-primary-100 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300' },
-      { icon: 'key-round', label: 'Khóa', value: t.keys ?? 0, cls: 'bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300' },
+      { icon: 'key-round', label: 'Khóa', value: t.keys ?? 0, cls: 'bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300' },
       { icon: 'file', label: 'File (object)', value: (t.objects ?? 0).toLocaleString('vi-VN'), cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
       { icon: 'hard-drive', label: 'Đã dùng', value: fmtBytes(used), cls: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300' },
     ].map((s) => `
@@ -280,7 +292,7 @@ async function loadKeys() {
     $('#keyList').innerHTML = keys.map((k) => `
       <div class="card">
         <div class="flex flex-wrap items-center gap-3">
-          <div class="stat-icon bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"><i data-lucide="key-round" class="w-5 h-5"></i></div>
+          <div class="stat-icon bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300"><i data-lucide="key-round" class="w-5 h-5"></i></div>
           <div class="flex-1 min-w-[180px]">
             <p class="font-bold">${esc(k.name || '(không tên)')}</p>
             <p class="text-xs font-mono text-slate-400 break-all">${esc(k.id)}</p>
@@ -472,6 +484,8 @@ function deleteObject(key, isFolder) {
 
 /* ---------- khởi động ---------- */
 document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+document.getElementById('themeLight').addEventListener('click', () => setTheme('light'));
+document.getElementById('themeDark').addEventListener('click', () => setTheme('dark'));
 document.getElementById('refreshBtn').addEventListener('click', () => switchTab(currentTab));
 document.getElementById('menuBtn').addEventListener('click', () => $('#mobileNav').classList.toggle('hidden'));
 document.getElementById('bucketSearch').addEventListener('input', loadBuckets);
