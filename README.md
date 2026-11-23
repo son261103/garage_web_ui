@@ -206,6 +206,7 @@ garage-web-ui/
 ├── compose-snippet.yml     # Đoạn service admin-ui để ghép vào /opt/garage/docker-compose.yml
 ├── garage.toml.example     # Mẫu config Garage (sao chép thành garage.toml)
 ├── install.sh              # Script kiểm tra + build + chạy trên roser
+├── update.sh               # Cập nhật cả Garage + giao diện rồi chạy lại (1 lệnh: bash admin-ui/update.sh)
 ├── .env.example            # Mẫu biến môi trường (chỉ placeholder, không có secret thật)
 ├── .gitignore
 └── app/
