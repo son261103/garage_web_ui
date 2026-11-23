@@ -1,0 +1,20 @@
+# Mẫu garage.toml — sao chép thành garage.toml và điền 2 secret thật.
+# Copy this file to garage.toml and fill in the real secrets.
+# Secret tạo bằng:  openssl rand -hex 32   (cho rpc_secret)
+#                   openssl rand -base64 32 (cho admin_token)
+# KHÔNG commit file garage.toml thật (đã có trong .gitignore).
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_secret = "THAY-BANG-OUTPUT-CUA-openssl-rand-hex-32"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "THAY-BANG-OUTPUT-CUA-openssl-rand-base64-32"

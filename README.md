@@ -64,13 +64,28 @@ Yêu cầu: Garage đã chạy bằng Docker Compose trong `/opt/garage`
 ### 1. Sao chép code lên server
 
 ```bash
-# Trên máy của bạn (hoặc trên roser, sau khi clone repo này):
-scp -r garage-web-ui roser@100.85.120.39:/opt/garage/admin-ui
+# Trên roser, trong /opt/garage:
+git clone https://github.com/son261103/garage_web_ui.git admin-ui
 # Lưu ý: thư mục đích phải là /opt/garage/admin-ui (nằm trong /opt/garage
 # để docker-compose.yml dưới đây trỏ build: ./admin-ui cho đúng).
 ```
 
+Repo đã có **đầy đủ file để chạy bằng Docker Compose**:
+[`docker-compose.yml`](docker-compose.yml) (cả 2 service `garage` + `admin-ui`),
+[`garage.toml.example`](garage.toml.example) (mẫu config Garage),
+[`.env.example`](.env.example) (mẫu biến môi trường),
+[`install.sh`](install.sh) (script kiểm tra + build + chạy),
+[`compose-snippet.yml`](compose-snippet.yml) (chỉ đoạn service `admin-ui`,
+dùng khi đã có sẵn file compose của Garage và chỉ muốn ghép thêm).
+
 ### 2. Thêm service `admin-ui` vào `/opt/garage/docker-compose.yml`
+
+Có 2 cách — chọn 1:
+- **Cách A (khuyên dùng):** chép file [`docker-compose.yml`](docker-compose.yml)
+  trong repo đè lên `/opt/garage/docker-compose.yml`. Service `garage` trong
+  file này giống hệt cấu hình đang chạy trên roser, chỉ thêm `admin-ui`.
+- **Cách B:** giữ nguyên file compose đã có, thêm đoạn trong file
+  [`compose-snippet.yml`](compose-snippet.yml) vào cuối file:
 
 Giữ nguyên service `garage` đã có, thêm đoạn trong file
 [`compose-snippet.yml`](compose-snippet.yml) vào cuối file:
@@ -99,9 +114,11 @@ từ lúc cài Garage). **Không ghi token thật vào `docker-compose.yml`.**
 
 ```bash
 cd /opt/garage
-docker compose up -d --build
-docker compose ps
-docker logs -f garage-admin-ui
+bash admin-ui/install.sh
+# hoặc chạy tay:
+# docker compose up -d --build
+# docker compose ps
+# docker logs -f garage-admin-ui
 ```
 
 Mở trình duyệt (đang bật Tailscale): **http://100.85.120.39:3910**
@@ -185,7 +202,10 @@ Gỡ giao diện **không xóa dữ liệu Garage**: bucket, key và file trong
 garage-web-ui/
 ├── README.md               # File này
 ├── Dockerfile              # Python 3.12 slim, FastAPI + Uvicorn, cổng 8000
+├── docker-compose.yml      # File compose ĐẦY ĐỦ: garage + admin-ui (đặt ở /opt/garage/)
 ├── compose-snippet.yml     # Đoạn service admin-ui để ghép vào /opt/garage/docker-compose.yml
+├── garage.toml.example     # Mẫu config Garage (sao chép thành garage.toml)
+├── install.sh              # Script kiểm tra + build + chạy trên roser
 ├── .env.example            # Mẫu biến môi trường (chỉ placeholder, không có secret thật)
 ├── .gitignore
 └── app/
