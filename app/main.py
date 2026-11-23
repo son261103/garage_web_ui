@@ -55,8 +55,14 @@ Các endpoint v2 đã kiểm chứng trong OpenAPI spec (garage-admin-v2.json v2
 
 S3 (duyệt / tải lên / tải xuống file) dùng boto3 với endpoint của Garage,
 signature v4, addressing_style = path (Garage không có root_domain nên
-không dùng virtual-host style được). Cần S3_ACCESS_KEY_ID +
-S3_SECRET_ACCESS_KEY; nếu thiếu, tab File báo rõ và các tab khác vẫn chạy.
+không dùng virtual-host style được).
+Tab File KHÔNG cần S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY trong .env:
+backend tự lấy secret của key qua Admin API (GET /v2/GetKeyInfo với
+showSecretKey=true, chỉ master admin_token mới gọi được) rồi giữ trong
+bộ nhớ tiến trình — secret không ghi file, không trả về trình duyệt.
+Thứ tự chọn key: biến môi trường (nếu có) > key đã chọn trên giao diện >
+key tên "app-key" > key có quyền đọc trên bucket đang mở > key đầu tiên.
+Đổi key trên giao diện là dùng ngay, không cần chạy lại container.
 """
 
 from __future__ import annotations
@@ -297,6 +303,24 @@ class GarageAdmin:
 
         return await self._call_v2_or_v1(v2, v1)
 
+    async def get_key_secret(self, key_id: str) -> str:
+        """Lấy secret của key qua Admin API (chỉ dùng trong backend).
+
+        v2: GET /v2/GetKeyInfo?id=&showSecretKey=true -> secretAccessKey.
+        v1 không có showSecretKey nên trả về "" (coi như không lấy được).
+        """
+        async def v2():
+            data = await self._request(
+                "GET", "/v2/GetKeyInfo", params={"id": key_id, "showSecretKey": "true"}
+            )
+            return (data if isinstance(data, dict) else {}).get("secretAccessKey") or ""
+
+        async def v1():
+            return ""
+
+        secret, _ = await self._call_v2_or_v1(v2, v1)
+        return secret
+
     async def create_key(self, name: str) -> tuple[dict, str]:
         async def v2():
             return await self._request("POST", "/v2/CreateKey", json={"name": name})
@@ -511,40 +535,140 @@ def normalize_key(raw: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# S3 (boto3) — chỉ dùng khi đã có S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY
+# S3 (boto3) — key tự phân giải, không cần điền vào .env
 # ---------------------------------------------------------------------------
-_s3_client = None
+# Secret của key S3 được lấy qua Admin API (GetKeyInfo?showSecretKey=true)
+# bằng admin token và chỉ giữ trong bộ nhớ tiến trình này (_secret_cache,
+# _s3_clients). Không ghi file, không trả về trình duyệt. Backend đã giữ
+# admin token (mạnh hơn mọi key S3) nên mức an toàn tương đương.
+_selected_key_id: str | None = None
+_secret_cache: dict[str, str] = {}
+_s3_clients: dict[str, Any] = {}
 
 
-def s3_client():
-    global _s3_client
-    if _s3_client is not None:
-        return _s3_client
-    if not S3_ACCESS_KEY_ID or not S3_SECRET_ACCESS_KEY:
-        return None
-    import boto3
-    from botocore.config import Config
+async def resolve_s3_credentials(
+    bucket_name: str | None = None, keys: list[dict] | None = None
+) -> dict | None:
+    """Phân giải key S3 theo thứ tự ưu tiên, trả về dict hoặc None.
 
-    _s3_client = boto3.client(
-        "s3",
-        endpoint_url=S3_ENDPOINT,
-        region_name=S3_REGION,
-        aws_access_key_id=S3_ACCESS_KEY_ID,
-        aws_secret_access_key=S3_SECRET_ACCESS_KEY,
-        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-    )
-    return _s3_client
+    Thứ tự: (a) biến môi trường S3_ACCESS_KEY_ID/SECRET nếu có;
+    (b) key đã chọn trên giao diện (_selected_key_id);
+    (c) key tên "app-key"; (d) key đầu tiên có quyền đọc trên bucket
+    đang mở; (e) key đầu tiên trong danh sách.
+    Dict trả về: {source, keyId, keyName, accessKeyId, secret}.
+    Ứng viên nào không lấy được secret thì bỏ qua, thử ứng viên sau.
+    """
+    if S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY:
+        return {
+            "source": "env",
+            "keyId": S3_ACCESS_KEY_ID,
+            "keyName": "(biến môi trường)",
+            "accessKeyId": S3_ACCESS_KEY_ID,
+            "secret": S3_SECRET_ACCESS_KEY,
+        }
+    if keys is None:
+        try:
+            raw_keys, _ = await admin.list_keys()
+        except GarageError:
+            return None
+        keys = [normalize_key(k) for k in raw_keys]
+    bucket_id = None
+    if bucket_name:
+        try:
+            raw_buckets, _ = await admin.list_buckets()
+            for b in raw_buckets:
+                nb = normalize_bucket(b)
+                if nb["name"] == bucket_name:
+                    bucket_id = nb["id"]
+                    break
+        except GarageError:
+            bucket_id = None
+    candidates: list[tuple[str, dict]] = []
+    if _selected_key_id:
+        sel = next((k for k in keys if k["id"] == _selected_key_id), None)
+        if sel:
+            candidates.append(("selected", sel))
+    app_key = next((k for k in keys if k["name"] == "app-key"), None)
+    if app_key:
+        candidates.append(("auto", app_key))
+    if bucket_id:
+        for k in keys:
+            if any(
+                b.get("bucketId") == bucket_id and (b.get("permissions") or {}).get("read")
+                for b in k["buckets"]
+            ):
+                candidates.append(("auto", k))
+                break
+    if keys:
+        candidates.append(("auto", keys[0]))
+    seen: set[str] = set()
+    for source, k in candidates:
+        kid = k["id"]
+        if not kid or kid in seen:
+            continue
+        seen.add(kid)
+        secret = _secret_cache.get(kid)
+        if not secret:
+            try:
+                secret = await admin.get_key_secret(kid)
+            except GarageError:
+                secret = ""
+            if secret:
+                _secret_cache[kid] = secret
+        if secret:
+            return {
+                "source": source,
+                "keyId": kid,
+                "keyName": k["name"] or kid,
+                "accessKeyId": kid,
+                "secret": secret,
+            }
+    return None
+
+
+async def get_s3_client(bucket_name: str | None = None):
+    """Trả về (boto3 client, info) hoặc (None, info).
+
+    info: {"configured": bool, "source": "env"|"selected"|"auto"|"none",
+           "keyId": ..., "keyName": ...}. Client được cache theo Key ID
+    nên đổi key trên giao diện là request sau dùng key mới ngay, không
+    cần chạy lại container.
+    """
+    creds = await resolve_s3_credentials(bucket_name)
+    if not creds:
+        return None, {"configured": False, "source": "none", "keyId": "", "keyName": ""}
+    cache_key = creds["accessKeyId"]
+    client = _s3_clients.get(cache_key)
+    if client is None:
+        import boto3
+        from botocore.config import Config
+
+        client = boto3.client(
+            "s3",
+            endpoint_url=S3_ENDPOINT,
+            region_name=S3_REGION,
+            aws_access_key_id=creds["accessKeyId"],
+            aws_secret_access_key=creds["secret"],
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+        )
+        _s3_clients[cache_key] = client
+    return client, {
+        "configured": True,
+        "source": creds["source"],
+        "keyId": creds["keyId"],
+        "keyName": creds["keyName"],
+    }
 
 
 def s3_not_configured_error() -> HTTPException:
     return HTTPException(
         status_code=503,
         detail=(
-            "Chưa cấu hình key S3 để duyệt file. Hãy tạo 1 key ở tab Khóa "
-            "(vd tên app-key), gán quyền đọc/ghi cho bucket, rồi thêm "
-            "S3_ACCESS_KEY_ID và S3_SECRET_ACCESS_KEY vào biến môi trường "
-            "của container admin-ui và chạy lại: docker compose up -d admin-ui. "
-            "Các tab Tổng quan, Bucket, Khóa, Bố cục vẫn dùng được bình thường."
+            "Chưa có key S3 nào để duyệt file. Hãy tạo 1 key ở tab Khóa "
+            "(vd tên app-key) và gán quyền đọc/ghi cho bucket đó — tab File "
+            "sẽ tự dùng key đó ngay, không cần sửa file .env hay chạy lại "
+            "container. Các tab Tổng quan, Bucket, Khóa, Bố cục vẫn dùng "
+            "được bình thường."
         ),
     )
 
@@ -556,7 +680,7 @@ def _s3_error_to_http(exc: Exception) -> HTTPException:
     if "AccessDenied" in msg or "Forbidden" in msg or "SignatureDoesNotMatch" in msg:
         return HTTPException(status_code=403, detail="Key S3 không có quyền làm việc này, hoặc Secret key sai. Hãy kiểm tra lại key và quyền của key trên bucket.")
     if "InvalidAccessKeyId" in msg:
-        return HTTPException(status_code=403, detail="Key ID S3 không đúng. Hãy kiểm tra lại S3_ACCESS_KEY_ID.")
+        return HTTPException(status_code=403, detail="Key ID S3 không đúng hoặc key đã bị xóa. Hãy chọn key khác ở tab File hoặc tạo key mới ở tab Khóa.")
     return HTTPException(status_code=502, detail=f"Lỗi khi gọi S3: {msg}")
 
 
@@ -581,6 +705,15 @@ async def api_health():
     except GarageError as exc:
         return {"ok": False, "garage": {"connected": False, "error": exc.message}, "s3Configured": bool(S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY)}
     status = health if isinstance(health, dict) else {}
+    s3_ok = bool(S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY)
+    if not s3_ok:
+        # Thử phân giải key như tab File (không env vẫn có thể dùng được
+        # nhờ key lấy qua Admin API). Lỗi thì coi như chưa cấu hình,
+        # không làm health check chậm/crash.
+        try:
+            s3_ok = (await resolve_s3_credentials()) is not None
+        except Exception:  # noqa: BLE001
+            s3_ok = False
     return {
         "ok": True,
         "garage": {
@@ -591,19 +724,73 @@ async def api_health():
             "partitionsQuorum": status.get("partitionsQuorum"),
             "partitions": status.get("partitions"),
         },
-        "s3Configured": bool(S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY),
+        "s3Configured": s3_ok,
     }
+
+
+async def _s3_configured_flag() -> bool:
+    """True khi tab File dùng được: có env, hoặc phân giải được key."""
+    if S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY:
+        return True
+    try:
+        return (await resolve_s3_credentials()) is not None
+    except Exception:  # noqa: BLE001
+        return False
 
 
 @app.get("/api/config")
 async def api_config():
     return {
-        "s3Configured": bool(S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY),
+        "s3Configured": await _s3_configured_flag(),
         "s3Endpoint": S3_ENDPOINT,
         "region": S3_REGION,
         "adminConfigured": bool(ADMIN_TOKEN),
         "adminUrl": ADMIN_URL,
     }
+
+
+@app.get("/api/s3-key")
+async def api_s3_key():
+    """Key S3 mà tab File đang dùng (không bao giờ trả secret về trình duyệt).
+
+    Trả về: {configured, source: "env"|"selected"|"auto"|"none",
+    keyId, keyName, keys: [{id, name}]}.
+    """
+    try:
+        raw_keys, _ = await admin.list_keys()
+    except GarageError as exc:
+        return {"configured": False, "source": "none", "keyId": "", "keyName": "", "keys": [], "error": exc.message}
+    norm = [normalize_key(k) for k in raw_keys]
+    key_list = [{"id": k["id"], "name": k["name"] or k["id"]} for k in norm]
+    creds = await resolve_s3_credentials(keys=norm)
+    if not creds:
+        return {"configured": False, "source": "none", "keyId": "", "keyName": "", "keys": key_list}
+    return {
+        "configured": True,
+        "source": creds["source"],
+        "keyId": creds["keyId"],
+        "keyName": creds["keyName"],
+        "keys": key_list,
+    }
+
+
+@app.post("/api/s3-key")
+async def api_select_s3_key(payload: dict):
+    """Chọn key S3 cho tab File (keyId null = bỏ chọn, về tự động)."""
+    global _selected_key_id
+    key_id = (payload.get("keyId") or "").strip() or None
+    if key_id is None:
+        _selected_key_id = None
+        return await api_s3_key()
+    try:
+        raw_keys, _ = await admin.list_keys()
+    except GarageError as exc:
+        raise HTTPException(status_code=503, detail=exc.message)
+    norm = [normalize_key(k) for k in raw_keys]
+    if not any(k["id"] == key_id for k in norm):
+        raise HTTPException(status_code=400, detail="Không tìm thấy key này. Có thể key đã bị xóa — hãy tải lại trang.")
+    _selected_key_id = key_id
+    return await api_s3_key()
 
 
 @app.get("/api/status")
@@ -725,7 +912,13 @@ async def api_key_info(key_id: str):
 
 @app.delete("/api/keys/{key_id}")
 async def api_delete_key(key_id: str):
+    global _selected_key_id
     await admin.delete_key(key_id)
+    # Key đã xóa thì secret/client cache theo key đó không còn giá trị.
+    _secret_cache.pop(key_id, None)
+    _s3_clients.pop(key_id, None)
+    if _selected_key_id == key_id:
+        _selected_key_id = None
     return {"ok": True, "message": "Đã xóa key."}
 
 
@@ -738,7 +931,7 @@ async def api_list_objects(
     prefix: str = Query(""),
     search: str = Query(""),
 ):
-    client = s3_client()
+    client, _s3info = await get_s3_client(bucket)
     if client is None:
         raise s3_not_configured_error()
     try:
@@ -799,7 +992,7 @@ async def api_upload_objects(
     prefix: str = Query(""),
     files: list[UploadFile] = File(...),
 ):
-    client = s3_client()
+    client, _s3info = await get_s3_client(bucket)
     if client is None:
         raise s3_not_configured_error()
     if not files:
@@ -827,8 +1020,8 @@ async def api_upload_objects(
     return {"uploaded": uploaded, "failed": failed}
 
 
-def _s3_get_object(bucket: str, key: str):
-    client = s3_client()
+async def _s3_get_object(bucket: str, key: str):
+    client, _s3info = await get_s3_client(bucket)
     if client is None:
         raise s3_not_configured_error()
     try:
@@ -839,7 +1032,7 @@ def _s3_get_object(bucket: str, key: str):
 
 @app.get("/api/objects/download")
 async def api_download_object(bucket: str = Query(...), key: str = Query(...)):
-    obj = _s3_get_object(bucket, key)
+    obj = await _s3_get_object(bucket, key)
     filename = key.split("/")[-1]
     return StreamingResponse(
         obj["Body"],
@@ -850,7 +1043,7 @@ async def api_download_object(bucket: str = Query(...), key: str = Query(...)):
 
 @app.get("/api/objects/preview")
 async def api_preview_object(bucket: str = Query(...), key: str = Query(...)):
-    obj = _s3_get_object(bucket, key)
+    obj = await _s3_get_object(bucket, key)
     return StreamingResponse(
         obj["Body"],
         media_type=obj.get("ContentType") or "application/octet-stream",
@@ -860,7 +1053,7 @@ async def api_preview_object(bucket: str = Query(...), key: str = Query(...)):
 
 @app.delete("/api/objects")
 async def api_delete_object(bucket: str = Query(...), key: str = Query(...)):
-    client = s3_client()
+    client, _s3info = await get_s3_client(bucket)
     if client is None:
         raise s3_not_configured_error()
     try:

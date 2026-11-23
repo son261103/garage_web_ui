@@ -44,19 +44,29 @@ Trình duyệt  ──HTTP──▶  admin-ui (FastAPI, cổng 8000 trong contai
   fallback sang **v1** (deprecated từ Garage 2.0) nếu v2 trả 404/405.
   Các endpoint v2 đã kiểm chứng:
   `GET /v2/GetClusterStatus`, `GET /v2/GetClusterHealth`,
-  `GET /v2/GetClusterLayout`, `GET /v2/ListBucketsInfo`,
+  `GET /v2/GetClusterLayout`, `GET /v2/ListBuckets`,
   `GET /v2/GetBucketInfo`, `POST /v2/CreateBucket`,
-  `POST /v2/DeleteBucket?id=`, `GET /v2/ListKeysInfo`,
-  `GET /v2/GetKeyInfo`, `POST /v2/CreateKey`, `POST /v2/DeleteKey`,
+  `POST /v2/DeleteBucket?id=`, `GET /v2/ListKeys`,
+  `GET /v2/GetKeyInfo` (kèm `?showSecretKey=true` để lấy secret của key),
+  `POST /v2/CreateKey`, `POST /v2/DeleteKey`,
   `POST /v2/AllowBucketKey`, `POST /v2/DenyBucketKey`.
+  Lưu ý tương thích: `ListBucketsInfo` / `ListKeysInfo` chỉ có từ Garage
+  v2.5.0+, roser chạy v2.4.1 nên backend dùng `ListBuckets` / `ListKeys`
+  rồi gọi `GetBucketInfo` / `GetKeyInfo` theo từng id.
   Lưu ý ngữ nghĩa đặc biệt của Garage: `AllowBucketKey` chỉ **bật** cờ
   = true, `DenyBucketKey` chỉ **tắt** cờ = true (cờ = false giữ nguyên),
   nên backend đọc quyền hiện tại rồi gọi Allow/Deny theo từng cờ thay đổi.
 - **File (S3):** dùng boto3, `signature_version=s3v4`,
   `addressing_style=path` (Garage không có `root_domain` nên không dùng
-  virtual-host style được). Cần `S3_ACCESS_KEY_ID` +
-  `S3_SECRET_ACCESS_KEY`; nếu chưa có, tab File hiện hướng dẫn tạo key,
-  các tab còn lại vẫn chạy bình thường (chỉ cần admin token).
+  virtual-host style được). Tab File **không cần** `S3_ACCESS_KEY_ID` /
+  `S3_SECRET_ACCESS_KEY` trong `.env`: backend tự lấy secret của key qua
+  Admin API (`GET /v2/GetKeyInfo?showSecretKey=true`, chỉ admin token mới
+  gọi được) và giữ trong bộ nhớ tiến trình — secret không ghi file, không
+  trả về trình duyệt. Thứ tự chọn key: biến môi trường (nếu có) > key đã
+  chọn trên giao diện > key tên `app-key` > key có quyền đọc trên bucket
+  đang mở > key đầu tiên. Tạo key ở tab Khóa xong là tab File dùng được
+  ngay, không cần chạy lại container. Nếu chưa có key nào, tab File hiện
+  hướng dẫn tạo key, các tab còn lại vẫn chạy bình thường.
 
 ## Cài đặt trên roser
 
@@ -135,14 +145,10 @@ phải trả `{"ok": true, "garage": {"connected": true, ...}}`.
    ngay** (chỉ hiện 1 lần).
 3. Vẫn ở tab **Khóa**, bấm **Đổi quyền** ở dòng bucket `media` →
    tick **Đọc + Ghi** → Lưu.
-4. Để dùng tab **File**, thêm 2 biến môi trường vào service `admin-ui`
-   trong `/opt/garage/docker-compose.yml` (dùng Key ID + Secret vừa tạo):
-   ```yaml
-   environment:
-     S3_ACCESS_KEY_ID: GKxxxxxxxxxxxxxxxx
-     S3_SECRET_ACCESS_KEY: <secret-vua-tao>
-   ```
-   Rồi chạy lại: `docker compose up -d admin-ui`
+4. Mở tab **File** — giao diện tự dùng key `app-key` vừa tạo, duyệt/tải
+   file được ngay. Không cần điền gì vào `.env`, không cần chạy lại
+   container. Nếu có từ 2 key trở lên, tab File có dropdown để đổi key
+   đang dùng.
 
 ## Biến môi trường
 
@@ -152,8 +158,8 @@ phải trả `{"ok": true, "garage": {"connected": true, ...}}`.
 | `GARAGE_ADMIN_TOKEN` | **Có** | — | Token quản trị Garage (`admin_token` trong `garage.toml`). Không có token thì mọi tab đều báo lỗi kết nối. |
 | `S3_ENDPOINT_URL` | Không | `http://garage:3900` | Địa chỉ S3 API. |
 | `S3_REGION` | Không | `garage` | Phải khớp `s3_region` trong `garage.toml`. |
-| `S3_ACCESS_KEY_ID` | Không* | — | Key ID S3 để duyệt/tải file. *Bắt buộc nếu muốn dùng tab File. |
-| `S3_SECRET_ACCESS_KEY` | Không* | — | Secret key S3 tương ứng. |
+| `S3_ACCESS_KEY_ID` | Không | — | Tùy chọn — chỉ dùng khi muốn ép 1 key cố định cho tab File. Mặc định để trống, giao diện tự chọn key (thứ tự: env > key đã chọn > `app-key` > key có quyền trên bucket > key đầu tiên). |
+| `S3_SECRET_ACCESS_KEY` | Không | — | Tùy chọn — secret tương ứng với `S3_ACCESS_KEY_ID` ở trên. |
 | `PORT` | Không | `8000` | Cổng trong container. |
 
 ## Bảo mật — đọc kỹ trước khi dùng
@@ -167,6 +173,11 @@ phải trả `{"ok": true, "garage": {"connected": true, ...}}`.
   `chmod 600` cho `.env` và `garage.toml`.
 - **Secret key S3 chỉ hiện 1 lần** khi tạo key. Mất secret thì phải xóa
   key cũ và tạo key mới — không lấy lại được.
+- **Secret key S3 không lưu file, không trả về trình duyệt.** Khi tab File
+  cần dùng key, backend tự lấy secret qua Admin API bằng admin token rồi
+  giữ trong bộ nhớ tiến trình (mất khi container chạy lại, lấy lại được
+  ngay qua Admin API). Trình duyệt chỉ biết id/tên key đang dùng, không
+  bao giờ thấy secret.
 - **Garage không có versioning.** Đẩy file trùng key sẽ ghi đè mất bản
   cũ, xóa file là mất luôn. Muốn giữ bản cũ thì đẩy với key mới
   (vd thêm ngày giờ / UUID vào tên file).
@@ -225,7 +236,8 @@ garage-web-ui/
 | Triệu chứng | Cách xử lý |
 | --- | --- |
 | Giao diện báo “Không kết nối được tới Garage” | Kiểm tra `docker compose ps` trong `/opt/garage` (container `garage` phải Up), kiểm tra `GARAGE_ADMIN_TOKEN` có khớp token trong `/opt/garage/.env` không, rồi `docker compose restart admin-ui`. |
-| Tab File báo “Chưa cấu hình key S3” | Làm theo hướng dẫn ở mục 4 ở trên (tạo key, gán quyền, thêm 2 biến S3 rồi `docker compose up -d admin-ui`). |
+| Tab File báo “Chưa có key S3 nào” | Tạo key ở tab Khóa rồi gán quyền đọc/ghi cho bucket (mục 4 ở trên) — tab File tự dùng key đó ngay, không cần sửa `.env` hay chạy lại container. |
+| Tab File dùng sai key / muốn đổi key | Tab File có dropdown đổi key (hiện khi có từ 2 key trở lên). Key đang dùng hiện ngay đầu tab File. |
 | Tạo bucket báo tên không hợp lệ | Tên 3–63 ký tự, chỉ chữ thường, số, `-` và `.`, bắt đầu/kết thúc bằng chữ hoặc số. |
 | Xóa bucket báo “chưa rỗng” | Xóa hết file trong bucket ở tab File trước, rồi xóa bucket. |
 | Tạo key xong không thấy Secret nữa | Secret chỉ hiện 1 lần lúc tạo. Xóa key đó và tạo key mới, lần này sao chép ngay. |

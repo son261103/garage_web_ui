@@ -399,14 +399,41 @@ async function savePermissions() {
 
 /* ---------- file ---------- */
 async function loadObjectsTab() {
+  // Key S3 tự phân giải ở backend (qua Admin API) — không cần điền .env.
+  // Chưa có key nào: hướng dẫn tạo key ở tab Khóa. Đã có key: hiện key
+  // đang dùng; từ 2 key trở lên thì có dropdown để đổi key tại chỗ.
   try {
-    const cfg = await api('/api/config');
-    s3Configured = !!cfg.s3Configured;
-    $('#s3Warning').innerHTML = s3Configured ? '' : `
+    const s3 = await api('/api/s3-key');
+    s3Configured = !!s3.configured;
+    const bar = $('#s3KeyBar');
+    if (!s3.configured) {
+      $('#s3Warning').innerHTML = `
       <div class="card !border-amber-200 dark:!border-amber-500/30 mb-4">
-        <p class="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2"><i data-lucide="triangle-exclamation-point" class="w-5 h-5"></i> Chưa cấu hình key S3 để duyệt file</p>
-        <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">Tab File cần 1 key S3 có quyền đọc/ghi bucket. Cách làm: tạo key ở tab <b>Khóa</b> (vd <code>app-key</code>), gán quyền đọc/ghi cho bucket, rồi thêm 2 biến <code>S3_ACCESS_KEY_ID</code> và <code>S3_SECRET_ACCESS_KEY</code> vào môi trường của container admin-ui và chạy lại <code>docker compose up -d admin-ui</code>. Các tab Tổng quan, Bucket, Khóa, Bố cục vẫn dùng được bình thường.</p>
+        <p class="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2"><i data-lucide="triangle-exclamation-point" class="w-5 h-5"></i> Chưa có key S3 nào để duyệt file</p>
+        <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">Cách làm: tạo key ở tab <b>Khóa</b> (vd <code>app-key</code>) rồi gán quyền đọc/ghi cho bucket — tab File sẽ tự dùng key đó ngay, không cần sửa file <code>.env</code> hay chạy lại container. Các tab Tổng quan, Bucket, Khóa, Bố cục vẫn dùng được bình thường.</p>
       </div>`;
+      if (bar) { bar.innerHTML = ''; bar.classList.add('hidden'); }
+    } else {
+      $('#s3Warning').innerHTML = '';
+      if (bar) {
+        bar.classList.remove('hidden');
+        const keys = s3.keys || [];
+        if (keys.length >= 2) {
+          const opts = keys.map((k) => `<option value="${esc(k.id)}" ${k.id === s3.keyId ? 'selected' : ''}>${esc(k.name || k.id)}</option>`).join('');
+          bar.innerHTML = `<span class="text-slate-500">Đang dùng key:</span><select id="s3KeySelect" class="input w-auto !py-1.5 !px-2 text-sm">${opts}</select><span class="text-xs text-slate-400">(tự động — đổi key tại đây, không cần chạy lại container)</span>`;
+          const sel = document.getElementById('s3KeySelect');
+          if (sel) sel.addEventListener('change', async () => {
+            try {
+              await api('/api/s3-key', { method: 'POST', body: JSON.stringify({ keyId: sel.value }) });
+              toast('Đã đổi key S3.');
+              loadObjects();
+            } catch (e) { toast(e.message, false); loadObjectsTab(); }
+          });
+        } else {
+          bar.innerHTML = `<span class="text-slate-500">Đang dùng key: <b class="text-slate-700 dark:text-slate-200">${esc(s3.keyName || s3.keyId)}</b> (tự động)</span>`;
+        }
+      }
+    }
     refreshIcons();
   } catch (e) { /* không chặn tab File */ }
   try {

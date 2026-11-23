@@ -115,7 +115,7 @@
               <li>Tạo bucket ở tab <b>Buckets</b> (vd: <code>media</code>).</li>
               <li>Tạo key ở tab <b>Khóa &amp; quyền</b>, lưu lại Secret key chỉ hiện 1 lần.</li>
               <li>Gán quyền đọc/ghi cho key trên bucket đó.</li>
-              <li>Điền Key ID + Secret vào biến môi trường <code>S3_ACCESS_KEY_ID</code> / <code>S3_SECRET_ACCESS_KEY</code> của container admin-ui rồi chạy lại, tab <b>File &amp; ảnh</b> mới duyệt/tải file được.</li>
+              <li>Mở tab <b>File &amp; ảnh</b> — giao diện tự dùng key vừa tạo, không cần điền gì vào <code>.env</code> hay chạy lại container.</li>
             </ol>
           </div>
         </section>
@@ -175,6 +175,7 @@
           </div>
           <div id="s3Warning"></div>
           <div class="card">
+            <div id="s3KeyBar" class="hidden flex flex-wrap items-center gap-2 text-sm mb-3"></div>
             <div class="flex flex-wrap gap-3 items-center">
               <select id="objBucket" class="input w-auto min-w-[180px]" onchange="onBucketChange()"></select>
               <div class="flex items-center gap-1 text-sm font-medium flex-1 min-w-[200px]" id="breadcrumb"></div>
@@ -272,7 +273,7 @@ bash admin-ui/update.sh</div>
                 <ul class="check-list">
                   <li><i data-lucide="check"></i> Trang Tổng quan hiện đúng node <span class="mono">3ca9e56e</span>, zone dc1.</li>
                   <li><i data-lucide="check"></i> Tạo bucket <span class="mono">media</span> rồi tạo key <span class="mono">app-key</span> và gán quyền đọc/ghi.</li>
-                  <li><i data-lucide="check"></i> Điền Key ID + Secret vào <span class="mono">.env</span> thì tab File &amp; ảnh mới duyệt được file.</li>
+                  <li><i data-lucide="check"></i> Mở tab <span class="mono">File &amp; ảnh</span> — giao diện tự dùng key vừa tạo, không cần điền gì thêm vào <span class="mono">.env</span>.</li>
                   <li><i data-lucide="check"></i> Port 3910 chỉ nghe qua Tailscale, không public ra internet.</li>
                 </ul>
               </div>
