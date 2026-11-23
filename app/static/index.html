@@ -137,7 +137,7 @@
           </div>
           <div id="bucketList" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
           <div id="bucketEmpty" class="empty hidden">
-            <i data-lucide="bucket" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
+            <i data-lucide="archive" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
             <p class="font-semibold mt-2">Chưa có bucket nào</p>
             <p class="text-sm text-slate-500">Nhấn “Tạo bucket” để tạo bucket đầu tiên, vd: media.</p>
           </div>
@@ -268,7 +268,7 @@ bash admin-ui/update.sh</div>
             </div>
             <div class="stack">
               <div class="card">
-                <h3><i data-lucide="check-circle-2"></i> Checklist sau khi cài</h3>
+                <h3><i data-lucide="circle-check"></i> Checklist sau khi cài</h3>
                 <ul class="check-list">
                   <li><i data-lucide="check"></i> Trang Tổng quan hiện đúng node <span class="mono">3ca9e56e</span>, zone dc1.</li>
                   <li><i data-lucide="check"></i> Tạo bucket <span class="mono">media</span> rồi tạo key <span class="mono">app-key</span> và gán quyền đọc/ghi.</li>
@@ -299,7 +299,7 @@ bash admin-ui/update.sh</div>
 <!-- Dialog tạo bucket -->
 <div id="bucketDialog" class="dialog hidden">
   <div class="dialog-card">
-    <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="bucket" class="w-5 h-5 text-primary-500"></i> Tạo bucket mới</h3>
+    <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="archive" class="w-5 h-5 text-primary-500"></i> Tạo bucket mới</h3>
     <p class="text-sm text-slate-500 mt-1">Tên bucket sẽ là tên dùng trong S3, vd <code>media</code>. Chỉ gồm chữ thường, số, dấu gạch ngang và dấu chấm.</p>
     <input id="newBucketName" class="input mt-4" placeholder="vd: media" maxlength="63" />
     <p id="bucketNameError" class="text-sm text-red-500 mt-1 hidden"></p>
@@ -326,7 +326,7 @@ bash admin-ui/update.sh</div>
 <!-- Dialog hiện secret 1 lần -->
 <div id="secretDialog" class="dialog hidden">
   <div class="dialog-card">
-    <h3 class="font-bold text-lg flex items-center gap-2 text-amber-600"><i data-lucide="alert-triangle" class="w-5 h-5"></i> Lưu lại ngay — chỉ hiện 1 lần!</h3>
+    <h3 class="font-bold text-lg flex items-center gap-2 text-amber-600"><i data-lucide="triangle-exclamation-point" class="w-5 h-5"></i> Lưu lại ngay — chỉ hiện 1 lần!</h3>
     <p class="text-sm text-slate-500 mt-1">Secret key sẽ không xem lại được nữa. Hãy sao chép và lưu vào nơi an toàn ngay bây giờ.</p>
     <div class="mt-4 space-y-3 text-sm">
       <div><label class="label">Key ID</label><div class="flex gap-2"><input id="secretKeyId" readonly class="input flex-1 font-mono" /><button class="btn-secondary" onclick="copyText('secretKeyId')">Sao chép</button></div></div>

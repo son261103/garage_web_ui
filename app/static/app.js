@@ -7,7 +7,7 @@ const $$ = (s) => document.querySelectorAll(s);
 
 const TABS = [
   { id: 'dashboard', label: 'Tổng quan', icon: 'layout-dashboard', title: 'Tổng quan', group: 'Quản lý' },
-  { id: 'buckets', label: 'Buckets', icon: 'bucket', title: 'Buckets', group: 'Quản lý' },
+  { id: 'buckets', label: 'Buckets', icon: 'archive', title: 'Buckets', group: 'Quản lý' },
   { id: 'keys', label: 'Khóa & quyền', icon: 'key-round', title: 'Khóa & quyền', group: 'Quản lý' },
   { id: 'objects', label: 'File & ảnh', icon: 'folder-open', title: 'File & ảnh', group: 'Quản lý' },
   { id: 'layout', label: 'Bố cục', icon: 'network', title: 'Bố cục', group: 'Hệ thống' },
@@ -69,7 +69,7 @@ function esc(s) {
 function toast(msg, ok = true) {
   const el = document.createElement('div');
   el.className = 'toast ' + (ok ? 'ok' : 'err');
-  el.innerHTML = `<i data-lucide="${ok ? 'check-circle-2' : 'alert-circle'}" class="w-5 h-5 shrink-0"></i><span>${esc(msg)}</span>`;
+  el.innerHTML = `<i data-lucide="${ok ? 'circle-check' : 'circle-exclamation-point'}" class="w-5 h-5 shrink-0"></i><span>${esc(msg)}</span>`;
   $('#toasts').appendChild(el);
   refreshIcons();
   setTimeout(() => el.remove(), 5000);
@@ -205,7 +205,7 @@ async function loadDashboard() {
     const used = t.bytes || 0;
     const pct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
     $('#statCards').innerHTML = [
-      { icon: 'bucket', label: 'Bucket', value: t.buckets ?? 0, cls: 'bg-primary-100 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300' },
+      { icon: 'archive', label: 'Bucket', value: t.buckets ?? 0, cls: 'bg-primary-100 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300' },
       { icon: 'key-round', label: 'Khóa', value: t.keys ?? 0, cls: 'bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300' },
       { icon: 'file', label: 'File (object)', value: (t.objects ?? 0).toLocaleString('vi-VN'), cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
       { icon: 'hard-drive', label: 'Đã dùng', value: fmtBytes(used), cls: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300' },
@@ -259,7 +259,7 @@ function bucketCard(b) {
   <div class="card">
     <div class="flex items-start justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
-        <div class="stat-icon bg-primary-100 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300"><i data-lucide="bucket" class="w-5 h-5"></i></div>
+        <div class="stat-icon bg-primary-100 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300"><i data-lucide="archive" class="w-5 h-5"></i></div>
         <div class="min-w-0"><p class="font-bold truncate">${esc(b.name)}</p><p class="text-xs text-slate-400 font-mono truncate">${esc(b.id)}</p></div>
       </div>
       <span class="badge badge-blue">${b.objects.toLocaleString('vi-VN')} file</span>
@@ -404,7 +404,7 @@ async function loadObjectsTab() {
     s3Configured = !!cfg.s3Configured;
     $('#s3Warning').innerHTML = s3Configured ? '' : `
       <div class="card !border-amber-200 dark:!border-amber-500/30 mb-4">
-        <p class="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-5 h-5"></i> Chưa cấu hình key S3 để duyệt file</p>
+        <p class="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2"><i data-lucide="triangle-exclamation-point" class="w-5 h-5"></i> Chưa cấu hình key S3 để duyệt file</p>
         <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">Tab File cần 1 key S3 có quyền đọc/ghi bucket. Cách làm: tạo key ở tab <b>Khóa</b> (vd <code>app-key</code>), gán quyền đọc/ghi cho bucket, rồi thêm 2 biến <code>S3_ACCESS_KEY_ID</code> và <code>S3_SECRET_ACCESS_KEY</code> vào môi trường của container admin-ui và chạy lại <code>docker compose up -d admin-ui</code>. Các tab Tổng quan, Bucket, Khóa, Bố cục vẫn dùng được bình thường.</p>
       </div>`;
     refreshIcons();
