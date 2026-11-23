@@ -13,10 +13,12 @@ và mã nguồn garage-webui (khairul169/garage-webui):
     "Authorization: Bearer <admin_token>".
   * API v1 (deprecated) dùng kiểu REST: GET /v1/status, GET /v1/bucket?list,
     POST /v1/bucket, POST /v1/bucket/allow, POST /v1/key, ...
-    Backend này vẫn giữ v1 làm đường dự phòng (fallback) nếu v2 trả 404/405,
-    để tương thích với Garage cũ. Trên Garage 2.4.1 (roser) v2 là đường chính.
+    Backend này vẫn giữ v1 làm đường dự phòng (fallback) nếu v2 báo endpoint
+    không tồn tại (404/405, hoặc 400 kèm "Unknown API endpoint" — Garage trả
+    400 cho endpoint v2 lạ thay vì 404), để tương thích với Garage cũ.
+    Trên Garage 2.4.1 (roser) v2 là đường chính.
 
-Các endpoint v2 đã kiểm chứng trong OpenAPI spec:
+Các endpoint v2 đã kiểm chứng trong OpenAPI spec (garage-admin-v2.json v2.5.0):
   GET  /v2/GetClusterStatus        -> trạng thái cluster (node, layout)
   GET  /v2/GetClusterHealth        -> {status: healthy|degraded|unavailable,
                                         knownNodes, connectedNodes,
@@ -24,7 +26,8 @@ Các endpoint v2 đã kiểm chứng trong OpenAPI spec:
                                         partitions, partitionsQuorum,
                                         partitionsAllOk}
   GET  /v2/GetClusterLayout        -> layout hiện tại + staged changes
-  GET  /v2/ListBucketsInfo         -> danh sách bucket kèm đầy đủ thông tin
+  GET  /v2/ListBuckets             -> [{id, created, globalAliases,
+                                        localAliases}] — chỉ id + alias
   GET  /v2/GetBucketInfo?id= | ?globalAlias=
                                    -> {id, globalAliases[], objects, bytes,
                                        quotas:{maxSize,maxObjects},
@@ -32,8 +35,14 @@ Các endpoint v2 đã kiểm chứng trong OpenAPI spec:
                                                {read,write,owner}}], ...}
   POST /v2/CreateBucket            {globalAlias} -> GetBucketInfoResponse
   POST /v2/DeleteBucket?id=<id>    -> 200, 400 nếu bucket chưa rỗng
-  POST /v2/ListKeysInfo            -> danh sách key kèm chi tiết
+  GET  /v2/ListKeys                -> [{id, name, expired}] — chỉ id + tên
   GET  /v2/GetKeyInfo?id= | ?search= (&showSecretKey=true để lấy secret)
+  LƯU Ý TƯƠNG THÍCH: /v2/ListBucketsInfo và /v2/ListKeysInfo (trả full info
+  trong 1 lần gọi) chỉ có từ Garage v2.5.0+. Roser chạy v2.4.1 nên KHÔNG có
+  2 endpoint này — gọi sẽ nhận 400 "Unknown API endpoint" (đã gặp live
+  23/11/2026). Vì vậy code dùng ListBuckets/ListKeys rồi gọi GetBucketInfo /
+  GetKeyInfo theo từng id để lấy đầy đủ thông tin; cách này chạy được trên
+  v2.4.1 trở lên (kể cả v2.5.0).
   POST /v2/CreateKey               {name} -> {accessKeyId, secretAccessKey, ...}
   POST /v2/DeleteKey?id=<id>
   POST /v2/AllowBucketKey          {bucketId, accessKeyId,
@@ -90,6 +99,19 @@ class GarageError(Exception):
         self.message = message
 
 
+def _is_missing_endpoint(exc: GarageError) -> bool:
+    """True khi Garage báo endpoint không tồn tại.
+
+    Garage trả 404/405 cho endpoint lạ, nhưng với endpoint v2 không tồn tại
+    (vd /v2/ListBucketsInfo trên Garage 2.4.1) nó trả 400 kèm message
+    "Unknown API endpoint: GET /v2/...". Cả 2 dạng đều được coi là
+    "endpoint không tồn tại" để fallback sang v1.
+    """
+    if exc.status in (404, 405):
+        return True
+    return exc.status == 400 and "Unknown API endpoint" in (exc.message or "")
+
+
 # ---------------------------------------------------------------------------
 # Client gọi Garage Admin API (v2 chính, v1 dự phòng)
 # ---------------------------------------------------------------------------
@@ -135,11 +157,11 @@ class GarageAdmin:
             return {"raw": resp.text}
 
     async def _call_v2_or_v1(self, v2, v1):
-        """Thử v2 trước; nếu v2 không tồn tại (404/405) thì thử v1."""
+        """Thử v2 trước; nếu v2 báo endpoint không tồn tại thì thử v1."""
         try:
             return await v2(), "v2"
         except GarageError as exc:
-            if exc.status in (404, 405):
+            if _is_missing_endpoint(exc):
                 return await v1(), "v1"
             raise
 
@@ -148,7 +170,7 @@ class GarageAdmin:
         try:
             return await self._request("GET", "/v2/GetClusterHealth"), "v2"
         except GarageError as exc:
-            if exc.status in (404, 405):
+            if _is_missing_endpoint(exc):
                 return await self._request("GET", "/v1/health"), "v1"
             raise
 
@@ -165,26 +187,34 @@ class GarageAdmin:
         )
 
     # -- bucket ---------------------------------------------------------------
+    async def _enrich_buckets(self, items: list[dict]) -> list[dict]:
+        """Lấy đầy đủ thông tin từng bucket (objects/bytes/keys/quotas).
+
+        ListBuckets (v2) và list v1 chỉ trả id + alias, nên gọi thêm
+        GetBucketInfo theo từng id. Bucket nào lỗi thì giữ nguyên bản
+        liệt kê để giao diện vẫn hiện tên, không vỡ cả danh sách.
+        """
+        out = []
+        for item in items:
+            bid = item.get("id") or item.get("bucketId")
+            if bid:
+                try:
+                    info, _ = await self.bucket_info(bucket_id=bid)
+                    out.append(info)
+                except GarageError:
+                    out.append(item)
+            else:
+                out.append(item)
+        return out
+
     async def list_buckets(self) -> tuple[list[dict], str]:
         async def v2():
-            data = await self._request("GET", "/v2/ListBucketsInfo")
-            return _as_list(data)
+            data = await self._request("GET", "/v2/ListBuckets")
+            return await self._enrich_buckets(_as_list(data))
 
         async def v1():
             data = await self._request("GET", "/v1/bucket", params={"list": ""})
-            items = _as_list(data)
-            out = []
-            for item in items:
-                bid = item.get("id") or item.get("bucketId")
-                if bid:
-                    try:
-                        info, _ = await self.bucket_info(bucket_id=bid)
-                        out.append(info)
-                    except GarageError:
-                        out.append(item)
-                else:
-                    out.append(item)
-            return out
+            return await self._enrich_buckets(_as_list(data))
 
         return await self._call_v2_or_v1(v2, v1)
 
@@ -224,14 +254,35 @@ class GarageAdmin:
         return await self._call_v2_or_v1(v2, v1)
 
     # -- key ------------------------------------------------------------------
+    async def _enrich_keys(self, items: list[dict]) -> list[dict]:
+        """Lấy đầy đủ thông tin từng key (buckets, permissions).
+
+        ListKeys (v2) chỉ trả {id, name, expired} nên gọi thêm GetKeyInfo
+        theo từng id. Key nào lỗi thì giữ nguyên bản liệt kê.
+        Chú ý: ListKeys trả trường "id" là Key ID, còn GetKeyInfo trả
+        "accessKeyId" — normalize_key xử lý cả hai.
+        """
+        out = []
+        for item in items:
+            kid = item.get("id") or item.get("accessKeyId")
+            if kid:
+                try:
+                    info, _ = await self.key_info(kid)
+                    out.append(info)
+                except GarageError:
+                    out.append(item)
+            else:
+                out.append(item)
+        return out
+
     async def list_keys(self) -> tuple[list[dict], str]:
         async def v2():
-            data = await self._request("GET", "/v2/ListKeysInfo")
-            return _as_list(data)
+            data = await self._request("GET", "/v2/ListKeys")
+            return await self._enrich_keys(_as_list(data))
 
         async def v1():
             data = await self._request("GET", "/v1/key", params={"list": ""})
-            return _as_list(data)
+            return await self._enrich_keys(_as_list(data))
 
         return await self._call_v2_or_v1(v2, v1)
 

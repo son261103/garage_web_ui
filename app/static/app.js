@@ -6,11 +6,12 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
 const TABS = [
-  { id: 'dashboard', label: 'Tổng quan', icon: 'layout-dashboard', title: 'Tổng quan', sub: 'Tình trạng cluster, dung lượng và thống kê' },
-  { id: 'buckets', label: 'Bucket', icon: 'bucket', title: 'Bucket', sub: 'Danh sách bucket, tạo / xóa bucket' },
-  { id: 'keys', label: 'Khóa', icon: 'key-round', title: 'Khóa truy cập', sub: 'Tạo key S3, gán quyền cho từng bucket' },
-  { id: 'objects', label: 'File', icon: 'folder-open', title: 'File trong bucket', sub: 'Duyệt, tải lên, tải xuống, xem ảnh' },
-  { id: 'layout', label: 'Bố cục', icon: 'network', title: 'Bố cục cluster', sub: 'Layout, node và dung lượng đã gán' },
+  { id: 'dashboard', label: 'Tổng quan', icon: 'layout-dashboard', title: 'Tổng quan', group: 'Quản lý' },
+  { id: 'buckets', label: 'Buckets', icon: 'bucket', title: 'Buckets', group: 'Quản lý' },
+  { id: 'keys', label: 'Khóa & quyền', icon: 'key-round', title: 'Khóa & quyền', group: 'Quản lý' },
+  { id: 'objects', label: 'File & ảnh', icon: 'folder-open', title: 'File & ảnh', group: 'Quản lý' },
+  { id: 'layout', label: 'Bố cục', icon: 'network', title: 'Bố cục', group: 'Hệ thống' },
+  { id: 'install', label: 'Cài lên server', icon: 'download', title: 'Cài lên server', group: 'Hệ thống' },
 ];
 
 let currentTab = 'dashboard';
@@ -109,28 +110,51 @@ $$('.dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target =
 
 /* ---------- điều hướng ---------- */
 function buildNav() {
-  $('#nav').innerHTML = TABS.map((t) => `
+  let html = '';
+  let group = '';
+  TABS.forEach((t) => {
+    if (t.group !== group) {
+      group = t.group;
+      html += `<div class="nav-label">${group}</div>`;
+    }
+    html += `
     <button class="nav-item ${t.id === currentTab ? 'active' : ''}" onclick="switchTab('${t.id}')">
-      <i data-lucide="${t.icon}" class="w-4 h-4"></i>${t.label}
-    </button>`).join('');
-  $('#mobileNav').innerHTML = TABS.map((t) => `
-    <button class="btn-secondary !py-1.5 !px-3 ${t.id === currentTab ? '!bg-primary-100 dark:!bg-primary-500/20 !text-primary-700 dark:!text-primary-300 !border-primary-200' : ''}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+      <i data-lucide="${t.icon}"></i>${t.label}
+    </button>`;
+  });
+  $('#nav').innerHTML = html;
   refreshIcons();
 }
 function switchTab(id) {
   currentTab = id;
   const tab = TABS.find((t) => t.id === id);
-  $('#pageTitle').textContent = tab.title;
-  $('#pageSubtitle').textContent = tab.sub;
-  $$('.view').forEach((v) => v.classList.add('hidden'));
-  document.getElementById('view-' + id).classList.remove('hidden');
-  $('#mobileNav').classList.add('hidden');
+  $('#crumbCur').textContent = tab.title;
+  $$('.view').forEach((v) => v.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+  closeSidebarMobile();
+  const content = $('#contentScroll');
+  if (content) content.scrollTop = 0;
   buildNav();
   if (id === 'dashboard') loadDashboard();
   if (id === 'buckets') loadBuckets();
   if (id === 'keys') loadKeys();
   if (id === 'objects') loadObjectsTab();
   if (id === 'layout') loadLayout();
+  // Trang "Cài lên server" chỉ là nội dung tĩnh, không cần tải dữ liệu.
+}
+
+/* ---------- sidebar trên mobile + menu profile trên topbar ---------- */
+function closeSidebarMobile() {
+  const sb = document.getElementById('sidebar');
+  const scrim = document.getElementById('scrim');
+  if (sb) sb.classList.remove('open');
+  if (scrim) scrim.classList.remove('show');
+}
+function closeProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileBtn');
+  if (menu) menu.classList.remove('show');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 
 /* ---------- bố cục ---------- */
@@ -192,6 +216,13 @@ async function loadDashboard() {
       </div>`).join('');
     $('#storageBar').style.width = pct.toFixed(1) + '%';
     $('#storageLabel').textContent = `${fmtBytes(used)} / ${cap ? fmtBytes(cap) : '—'} (${pct.toFixed(1)}%)`;
+    // Thẻ Cluster trong menu profile (topbar) hiện cùng số liệu này.
+    const pmBar = document.getElementById('pmStorageBar');
+    const pmLabel = document.getElementById('pmStorageLabel');
+    const pmPct = document.getElementById('pmStoragePct');
+    if (pmBar) pmBar.style.width = pct.toFixed(1) + '%';
+    if (pmLabel) pmLabel.textContent = cap ? `${fmtBytes(used)} / ${fmtBytes(cap)} đã dùng` : 'Chưa gán layout';
+    if (pmPct) pmPct.textContent = `${pct.toFixed(0)}%`;
     $('#storageNote').textContent = cap
       ? `Dung lượng đã gán cho cluster là ${fmtBytes(cap)} (layout zone dc1, 40 GB). Còn trống khoảng ${fmtBytes(Math.max(0, cap - used))}.`
       : 'Chưa gán layout cho cluster. Hãy gán layout bằng CLI rồi làm mới trang này.';
@@ -483,12 +514,33 @@ function deleteObject(key, isFolder) {
 }
 
 /* ---------- khởi động ---------- */
-document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+// Nút sáng/tối CHỈ nằm trong menu profile (topbar) — không còn nút nào ở ngoài.
 document.getElementById('themeLight').addEventListener('click', () => setTheme('light'));
 document.getElementById('themeDark').addEventListener('click', () => setTheme('dark'));
 document.getElementById('refreshBtn').addEventListener('click', () => switchTab(currentTab));
-document.getElementById('menuBtn').addEventListener('click', () => $('#mobileNav').classList.toggle('hidden'));
+document.getElementById('menuBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('scrim').classList.add('show');
+});
+document.getElementById('scrim').addEventListener('click', closeSidebarMobile);
 document.getElementById('bucketSearch').addEventListener('input', loadBuckets);
+// Menu profile: bấm nút thì mở/đóng, bấm ra ngoài hoặc Esc thì đóng,
+// bấm mục cài đặt thì nhảy sang trang đó rồi đóng menu.
+const profileBtn = document.getElementById('profileBtn');
+const profileMenu = document.getElementById('profileMenu');
+profileBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = profileMenu.classList.toggle('show');
+  profileBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+profileMenu.addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', closeProfileMenu);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeProfileMenu(); closeSidebarMobile(); } });
+$$('.pm-item[data-goto]').forEach((b) => b.addEventListener('click', () => {
+  closeProfileMenu();
+  switchTab(b.getAttribute('data-goto'));
+}));
 initTheme();
 buildNav();
 switchTab('dashboard');

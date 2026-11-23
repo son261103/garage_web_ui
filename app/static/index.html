@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
 <title>Garage Web UI — Quản trị kho lưu trữ</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -13,7 +14,7 @@
         colors: {
           primary: {50:'#fdf2f8',100:'#fce7f3',200:'#fbcfe8',300:'#f9a8d4',400:'#f472b6',500:'#ec4899',600:'#db2777',700:'#be185d'}
         },
-        fontFamily: { sans: ['Inter','system-ui','-apple-system','Segoe UI','sans-serif'] }
+        fontFamily: { sans: ['"Be Vietnam Pro"','system-ui','-apple-system','Segoe UI','sans-serif'] }
       }
     }
   }
@@ -21,156 +22,277 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <link rel="stylesheet" href="/static/style.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 </head>
-<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen">
-<div id="app" class="flex min-h-screen">
-  <!-- Sidebar -->
-  <aside class="hidden md:flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 h-screen">
-    <div class="flex items-center gap-3 px-5 py-5">
-      <div class="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-lg shadow-primary-500/30">
-        <i data-lucide="database" class="w-5 h-5"></i>
-      </div>
-      <div>
-        <p class="font-extrabold leading-tight">Garage Web UI</p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">Quản trị kho lưu trữ S3</p>
+<body>
+<div class="app">
+
+  <!-- ============ TOPBAR: logo + tên trang + profile & cài đặt ============ -->
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn" type="button" aria-label="Mở menu"><i data-lucide="menu" class="w-5 h-5"></i></button>
+    <div class="brand">
+      <span class="logo-badge" aria-hidden="true"><i data-lucide="database"></i></span>
+      <span class="logo-name">Garage</span>
+    </div>
+    <span class="brand-sep" aria-hidden="true"></span>
+    <div class="crumb"><span class="cur" id="crumbCur">Tổng quan</span></div>
+    <div class="spacer"></div>
+    <div class="profile-wrap">
+      <button class="profile-btn" type="button" id="profileBtn" aria-haspopup="true" aria-expanded="false" aria-label="Mở menu hồ sơ và cài đặt">
+        <span class="avatar" aria-hidden="true"><i data-lucide="user"></i></span>
+        <span class="profile-name">Admin</span>
+      </button>
+      <div class="profile-menu" id="profileMenu" role="menu" aria-label="Hồ sơ và cài đặt">
+        <div class="pm-head">
+          <span class="avatar lg" aria-hidden="true"><i data-lucide="user"></i></span>
+          <div>
+            <div class="pm-name">Admin</div>
+            <div class="pm-sub">Quản trị viên</div>
+          </div>
+        </div>
+        <div class="cluster-card">
+          <div class="cluster-top"><span id="healthBadge" class="badge badge-muted"><span class="dot"></span> Đang kiểm tra…</span><span class="live-tag">LIVE</span></div>
+          <div class="cluster-meta mono">node 3ca9e56e…f0c6 · dc1</div>
+          <div class="bar"><i id="pmStorageBar" style="width:0%"></i></div>
+          <div class="cluster-nums"><span id="pmStorageLabel">— / — đã dùng</span><b id="pmStoragePct">—</b></div>
+        </div>
+        <div class="pm-label">Giao diện</div>
+        <div class="toggle" role="group" aria-label="Chế độ sáng tối">
+          <button type="button" id="themeLight"><i data-lucide="sun"></i> Sáng</button>
+          <button type="button" id="themeDark"><i data-lucide="moon"></i> Tối</button>
+        </div>
+        <div class="pm-label">Cài đặt</div>
+        <button class="pm-item" type="button" data-goto="keys"><i data-lucide="key-round"></i> Khóa &amp; quyền</button>
+        <button class="pm-item" type="button" data-goto="layout"><i data-lucide="network"></i> Bố cục cluster</button>
+        <button class="pm-item" type="button" data-goto="install"><i data-lucide="download"></i> Cài lên server</button>
       </div>
     </div>
-    <nav id="nav" class="flex-1 px-3 space-y-1 text-sm font-medium"></nav>
-    <div class="p-4">
-      <div class="rounded-xl bg-primary-50 dark:bg-primary-500/10 border border-primary-100 dark:border-primary-500/20 p-3 text-xs leading-relaxed">
-        <p class="font-semibold text-primary-700 dark:text-primary-300 flex items-center gap-1.5"><i data-lucide="shield-check" class="w-4 h-4"></i> Chỉ dùng qua Tailscale</p>
-        <p class="text-slate-600 dark:text-slate-300 mt-1">Không mở cổng 3910 ra internet. Admin token chỉ nằm ở backend, không lộ ra trình duyệt.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 mt-3">
-        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400 px-1 pb-2">Giao diện</p>
-        <div class="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
-          <button type="button" id="themeLight" class="theme-seg-btn"><i data-lucide="sun" class="w-4 h-4"></i>Sáng</button>
-          <button type="button" id="themeDark" class="theme-seg-btn"><i data-lucide="moon" class="w-4 h-4"></i>Tối</button>
-        </div>
-      </div>
-      <p class="text-[11px] text-slate-400 mt-3 text-center">Garage v2.4.1 &middot; Single-node &middot; roser</p>
-    </div>
-  </aside>
+  </header>
 
-  <!-- Main -->
-  <div class="flex-1 min-w-0 flex flex-col">
-    <header class="sticky top-0 z-30 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
-      <div class="flex items-center gap-3 px-4 md:px-8 py-3">
-        <button id="menuBtn" class="md:hidden btn-icon" aria-label="Mở menu"><i data-lucide="menu" class="w-5 h-5"></i></button>
-        <div class="flex-1 min-w-0">
-          <h1 id="pageTitle" class="font-bold text-lg md:text-xl truncate">Tổng quan</h1>
-          <p id="pageSubtitle" class="text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">Tình trạng cluster, dung lượng và thống kê</p>
-        </div>
-        <span id="healthBadge" class="badge badge-muted"><span class="dot"></span> Đang kiểm tra…</span>
-        <button id="themeBtn" class="btn-icon md:hidden" title="Đổi sáng / tối" aria-label="Đổi giao diện sáng tối"><i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i><i data-lucide="moon" class="w-5 h-5 dark:hidden"></i></button>
-        <button id="refreshBtn" class="btn-primary hidden sm:inline-flex"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Làm mới</button>
-      </div>
-      <nav id="mobileNav" class="md:hidden hidden px-4 pb-3 flex flex-wrap gap-2 text-sm"></nav>
-    </header>
+  <div class="body-row">
+    <!-- ============ SIDEBAR: chỉ còn menu điều hướng ============ -->
+    <aside class="sidebar" id="sidebar" aria-label="Điều hướng chính">
+      <nav class="sidebar-nav" id="nav"></nav>
+    </aside>
+    <div class="scrim" id="scrim"></div>
 
-    <main class="flex-1 px-4 md:px-8 py-6 max-w-6xl w-full mx-auto">
-      <div id="globalAlert"></div>
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+      <main class="content" id="contentScroll">
 
-      <!-- TỔNG QUAN -->
-      <section id="view-dashboard" class="view">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="statCards"></div>
-        <div class="grid lg:grid-cols-3 gap-4 mt-4">
-          <div class="card lg:col-span-2">
-            <div class="flex items-center justify-between mb-3">
-              <h2 class="card-title"><i data-lucide="hard-drive" class="w-5 h-5 text-primary-500"></i> Dung lượng lưu trữ</h2>
-              <span id="storageLabel" class="text-sm text-slate-500"></span>
+        <!-- TỔNG QUAN -->
+        <section id="view-dashboard" class="view active" aria-label="Tổng quan">
+          <div class="page-head">
+            <div class="ph-text">
+              <h1>Tổng quan</h1>
+              <p>Server roser · Tailscale 100.85.120.39 · thư mục <span class="mono">/opt/garage</span></p>
             </div>
-            <div class="h-4 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-              <div id="storageBar" class="h-full rounded-full bg-primary-500 transition-all" style="width:0%"></div>
+            <div class="ph-actions">
+              <button id="refreshBtn" class="btn-secondary"><i data-lucide="refresh-cw"></i> Làm mới</button>
             </div>
-            <p id="storageNote" class="text-sm text-slate-500 dark:text-slate-400 mt-3"></p>
-            <div class="grid sm:grid-cols-3 gap-3 mt-4 text-sm" id="nodeCards"></div>
+          </div>
+          <div id="globalAlert"></div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="statCards"></div>
+          <div class="grid lg:grid-cols-3 gap-4">
+            <div class="card lg:col-span-2">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="card-title"><i data-lucide="hard-drive"></i> Dung lượng lưu trữ</h2>
+                <span id="storageLabel" class="text-sm text-slate-500"></span>
+              </div>
+              <div class="bar" style="height:8px"><i id="storageBar" style="width:0%"></i></div>
+              <p id="storageNote" class="text-sm text-slate-500 dark:text-slate-400 mt-3"></p>
+              <div class="grid sm:grid-cols-3 gap-3 mt-4 text-sm" id="nodeCards"></div>
+            </div>
+            <div class="card">
+              <h2 class="card-title mb-3"><i data-lucide="activity"></i> Tình trạng node</h2>
+              <div id="healthBox" class="space-y-2 text-sm"></div>
+            </div>
           </div>
           <div class="card">
-            <h2 class="card-title mb-3"><i data-lucide="activity" class="w-5 h-5 text-primary-500"></i> Tình trạng node</h2>
-            <div id="healthBox" class="space-y-2 text-sm"></div>
+            <h2 class="card-title mb-2"><i data-lucide="zap"></i> Bắt đầu nhanh</h2>
+            <ol class="list-decimal ml-5 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+              <li>Tạo bucket ở tab <b>Buckets</b> (vd: <code>media</code>).</li>
+              <li>Tạo key ở tab <b>Khóa &amp; quyền</b>, lưu lại Secret key chỉ hiện 1 lần.</li>
+              <li>Gán quyền đọc/ghi cho key trên bucket đó.</li>
+              <li>Điền Key ID + Secret vào biến môi trường <code>S3_ACCESS_KEY_ID</code> / <code>S3_SECRET_ACCESS_KEY</code> của container admin-ui rồi chạy lại, tab <b>File &amp; ảnh</b> mới duyệt/tải file được.</li>
+            </ol>
           </div>
-        </div>
-        <div class="card mt-4">
-          <h2 class="card-title mb-2"><i data-lucide="zap" class="w-5 h-5 text-primary-500"></i> Bắt đầu nhanh</h2>
-          <ol class="list-decimal ml-5 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
-            <li>Tạo bucket ở tab <b>Bucket</b> (vd: <code>media</code>).</li>
-            <li>Tạo key ở tab <b>Khóa</b>, lưu lại Secret key chỉ hiện 1 lần.</li>
-            <li>Gán quyền đọc/ghi cho key trên bucket đó.</li>
-            <li>Điền Key ID + Secret vào biến môi trường <code>S3_ACCESS_KEY_ID</code> / <code>S3_SECRET_ACCESS_KEY</code> của container admin-ui rồi chạy lại, tab <b>File</b> mới duyệt/tải file được.</li>
-          </ol>
-        </div>
-      </section>
+        </section>
 
-      <!-- BUCKET -->
-      <section id="view-buckets" class="view hidden">
-        <div class="flex flex-wrap items-center gap-3 mb-4">
-          <div class="relative flex-1 min-w-[220px]">
-            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input id="bucketSearch" class="input pl-9" placeholder="Tìm bucket theo tên…" />
-          </div>
-          <button class="btn-primary" onclick="openBucketDialog()"><i data-lucide="plus" class="w-4 h-4"></i> Tạo bucket</button>
-        </div>
-        <div id="bucketList" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-        <div id="bucketEmpty" class="empty hidden">
-          <i data-lucide="bucket" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
-          <p class="font-semibold mt-2">Chưa có bucket nào</p>
-          <p class="text-sm text-slate-500">Nhấn “Tạo bucket” để tạo bucket đầu tiên, vd: media.</p>
-        </div>
-      </section>
-
-      <!-- KEY -->
-      <section id="view-keys" class="view hidden">
-        <div class="flex flex-wrap items-center gap-3 mb-4">
-          <p class="text-sm text-slate-500 dark:text-slate-400 flex-1">Mỗi key là 1 tài khoản riêng cho 1 ứng dụng. Đừng dùng chung 1 key cho mọi nơi.</p>
-          <button class="btn-primary" onclick="openKeyDialog()"><i data-lucide="key-round" class="w-4 h-4"></i> Tạo key</button>
-        </div>
-        <div id="keyList" class="space-y-3"></div>
-        <div id="keyEmpty" class="empty hidden">
-          <i data-lucide="key-round" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
-          <p class="font-semibold mt-2">Chưa có key nào</p>
-          <p class="text-sm text-slate-500">Tạo key rồi gán quyền cho bucket để ứng dụng dùng được S3.</p>
-        </div>
-      </section>
-
-      <!-- FILE -->
-      <section id="view-objects" class="view hidden">
-        <div id="s3Warning"></div>
-        <div class="card mb-4">
-          <div class="flex flex-wrap gap-3 items-center">
-            <select id="objBucket" class="input w-auto min-w-[180px]" onchange="onBucketChange()"></select>
-            <div class="flex items-center gap-1 text-sm font-medium flex-1 min-w-[200px]" id="breadcrumb"></div>
-            <div class="relative">
-              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-              <input id="objSearch" class="input pl-9 w-56" placeholder="Tìm theo tên file…" oninput="loadObjects()" />
+        <!-- BUCKETS -->
+        <section id="view-buckets" class="view" aria-label="Buckets">
+          <div class="page-head">
+            <div class="ph-text">
+              <h1>Buckets</h1>
+              <p>Tương đương lệnh <span class="mono">garage bucket create / list / delete</span></p>
             </div>
-            <label class="btn-secondary cursor-pointer"><i data-lucide="upload" class="w-4 h-4"></i> Tải lên<input id="uploadInput" type="file" multiple class="hidden" onchange="uploadFiles(this.files)" /></label>
+            <div class="ph-actions">
+              <button class="btn-primary" onclick="openBucketDialog()"><i data-lucide="plus"></i> Tạo bucket</button>
+            </div>
           </div>
-          <div id="uploadProgress" class="hidden mt-3 text-sm"></div>
-        </div>
-        <div id="objectList" class="card !p-0 overflow-hidden"></div>
-        <div id="objectEmpty" class="empty hidden">
-          <i data-lucide="folder-open" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
-          <p class="font-semibold mt-2">Thư mục này trống</p>
-          <p class="text-sm text-slate-500">Nhấn “Tải lên” để đẩy file đầu tiên vào đây.</p>
-        </div>
-      </section>
+          <div class="inline-search">
+            <i data-lucide="search"></i>
+            <input id="bucketSearch" type="search" placeholder="Tìm bucket…" aria-label="Tìm bucket" />
+          </div>
+          <div id="bucketList" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+          <div id="bucketEmpty" class="empty hidden">
+            <i data-lucide="bucket" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
+            <p class="font-semibold mt-2">Chưa có bucket nào</p>
+            <p class="text-sm text-slate-500">Nhấn “Tạo bucket” để tạo bucket đầu tiên, vd: media.</p>
+          </div>
+        </section>
 
-      <!-- BỐ CỤC -->
-      <section id="view-layout" class="view hidden">
-        <div class="card">
-          <h2 class="card-title mb-1"><i data-lucide="network" class="w-5 h-5 text-primary-500"></i> Bố cục cluster (layout)</h2>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Layout cho Garage biết node nào chứa bao nhiêu dữ liệu, ở zone nào. Chỉ xem ở đây — không đổi layout từ giao diện này để tránh làm hỏng cluster.</p>
-          <div id="layoutBox" class="text-sm"></div>
-        </div>
-        <div class="card mt-4">
-          <h2 class="card-title mb-3"><i data-lucide="server" class="w-5 h-5 text-primary-500"></i> Node trong cluster</h2>
-          <div id="layoutNodes" class="overflow-x-auto"></div>
-        </div>
-      </section>
-    </main>
-    <footer class="text-center text-xs text-slate-400 py-4">Garage Web UI &middot; Chạy trên roser &middot; Chỉ truy cập qua Tailscale</footer>
+        <!-- KHÓA & QUYỀN -->
+        <section id="view-keys" class="view" aria-label="Khóa và quyền">
+          <div class="page-head">
+            <div class="ph-text">
+              <h1>Khóa &amp; quyền</h1>
+              <p>Mỗi key là 1 tài khoản riêng cho 1 ứng dụng. Đừng dùng chung 1 key cho mọi nơi.</p>
+            </div>
+            <div class="ph-actions">
+              <button class="btn-primary" onclick="openKeyDialog()"><i data-lucide="key-round"></i> Tạo key</button>
+            </div>
+          </div>
+          <div id="keyList" class="space-y-3"></div>
+          <div id="keyEmpty" class="empty hidden">
+            <i data-lucide="key-round" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
+            <p class="font-semibold mt-2">Chưa có key nào</p>
+            <p class="text-sm text-slate-500">Tạo key rồi gán quyền cho bucket để ứng dụng dùng được S3.</p>
+          </div>
+        </section>
+
+        <!-- FILE & ẢNH -->
+        <section id="view-objects" class="view" aria-label="File và ảnh">
+          <div class="page-head">
+            <div class="ph-text">
+              <h1>File &amp; ảnh</h1>
+              <p>Duyệt object theo bucket · tương đương <span class="mono">garage bucket list-objects</span></p>
+            </div>
+            <div class="ph-actions">
+              <label class="btn-secondary cursor-pointer"><i data-lucide="upload"></i> Tải lên<input id="uploadInput" type="file" multiple class="hidden" onchange="uploadFiles(this.files)" /></label>
+            </div>
+          </div>
+          <div id="s3Warning"></div>
+          <div class="card">
+            <div class="flex flex-wrap gap-3 items-center">
+              <select id="objBucket" class="input w-auto min-w-[180px]" onchange="onBucketChange()"></select>
+              <div class="flex items-center gap-1 text-sm font-medium flex-1 min-w-[200px]" id="breadcrumb"></div>
+              <div class="inline-search">
+                <i data-lucide="search"></i>
+                <input id="objSearch" type="search" placeholder="Tìm theo tên file…" oninput="loadObjects()" />
+              </div>
+            </div>
+            <div id="uploadProgress" class="hidden mt-3 text-sm"></div>
+          </div>
+          <div id="objectList" class="card !p-0 overflow-hidden"></div>
+          <div id="objectEmpty" class="empty hidden">
+            <i data-lucide="folder-open" class="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto"></i>
+            <p class="font-semibold mt-2">Thư mục này trống</p>
+            <p class="text-sm text-slate-500">Nhấn “Tải lên” để đẩy file đầu tiên vào đây.</p>
+          </div>
+        </section>
+
+        <!-- BỐ CỤC -->
+        <section id="view-layout" class="view" aria-label="Bố cục cluster">
+          <div class="page-head">
+            <div class="ph-text">
+              <h1>Bố cục</h1>
+              <p>Layout của cluster · tương đương lệnh <span class="mono">garage layout show</span></p>
+            </div>
+            <div class="ph-actions">
+              <button class="btn-secondary" onclick="copyString('docker compose exec garage /garage layout show','Đã sao chép lệnh layout show.')"><i data-lucide="copy"></i> Chép lệnh layout show</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2 class="card-title mb-1"><i data-lucide="network"></i> Bố cục cluster (layout)</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Layout cho Garage biết node nào chứa bao nhiêu dữ liệu, ở zone nào. Chỉ xem ở đây — không đổi layout từ giao diện này để tránh làm hỏng cluster.</p>
+            <div id="layoutBox" class="text-sm"></div>
+          </div>
+          <div class="card">
+            <h2 class="card-title mb-3"><i data-lucide="server"></i> Node trong cluster</h2>
+            <div id="layoutNodes" class="overflow-x-auto"></div>
+          </div>
+        </section>
+
+        <!-- CÀI LÊN SERVER -->
+        <section id="view-install" class="view" aria-label="Cài lên server">
+          <div class="page-head">
+            <div class="ph-text">
+              <h1>Cài lên server</h1>
+              <p>Đưa giao diện này lên roser cạnh Garage · UI chạy ở port <span class="mono">:3910</span>, chỉ qua Tailscale</p>
+            </div>
+            <div class="ph-actions">
+              <button class="btn-secondary" onclick="copyString('cd /opt/garage && bash admin-ui/update.sh','Đã sao chép lệnh cập nhật.')"><i data-lucide="copy"></i> Chép lệnh cập nhật</button>
+            </div>
+          </div>
+          <div class="cols">
+            <div class="card">
+              <div class="step">
+                <div class="step-n">1</div>
+                <div class="step-body">
+                  <h4>Lấy code mới nhất về server</h4>
+                  <p>Lần đầu clone repo vào <span class="mono">/opt/garage/admin-ui</span>, các lần sau chỉ cần <span class="mono">git pull</span>.</p>
+                  <div class="codeblock">cd /opt/garage
+git clone https://github.com/son261103/garage_web_ui.git admin-ui</div>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <div class="step-body">
+                  <h4>File docker-compose đầy đủ đã có sẵn trong repo</h4>
+                  <p><span class="mono">docker-compose.yml</span> trong repo gồm cả 2 service <span class="mono">garage</span> + <span class="mono">admin-ui</span>. Service admin-ui đọc Admin Token từ <span class="mono">.env</span> sẵn có, gọi Admin API nội bộ :3903 — không mở thêm port ra ngoài Tailscale.</p>
+                  <div class="codeblock">cp admin-ui/docker-compose.yml docker-compose.yml
+# hoặc chạy script kiểm tra + build + chạy:
+bash admin-ui/install.sh</div>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <div class="step-body">
+                  <h4>Cập nhật + chạy lại chỉ 1 lệnh</h4>
+                  <p>Script tự pull code mới, pull image Garage mới, build lại giao diện rồi chạy lại cả 2 container. Không xóa dữ liệu trong <span class="mono">meta/</span> và <span class="mono">data/</span>.</p>
+                  <div class="codeblock">cd /opt/garage
+bash admin-ui/update.sh</div>
+                  <button class="btn-secondary" style="margin-top:8px" onclick="copyString('cd /opt/garage && bash admin-ui/update.sh','Đã sao chép lệnh cập nhật.')">Sao chép cụm lệnh này</button>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-n">4</div>
+                <div class="step-body">
+                  <h4>Mở giao diện</h4>
+                  <p>Từ máy đã join Tailscale, mở <span class="mono">http://100.85.120.39:3910</span>. Kiểm tra nhanh tình trạng:</p>
+                  <div class="codeblock">curl http://100.85.120.39:3910/api/health</div>
+                </div>
+              </div>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <h3><i data-lucide="check-circle-2"></i> Checklist sau khi cài</h3>
+                <ul class="check-list">
+                  <li><i data-lucide="check"></i> Trang Tổng quan hiện đúng node <span class="mono">3ca9e56e</span>, zone dc1.</li>
+                  <li><i data-lucide="check"></i> Tạo bucket <span class="mono">media</span> rồi tạo key <span class="mono">app-key</span> và gán quyền đọc/ghi.</li>
+                  <li><i data-lucide="check"></i> Điền Key ID + Secret vào <span class="mono">.env</span> thì tab File &amp; ảnh mới duyệt được file.</li>
+                  <li><i data-lucide="check"></i> Port 3910 chỉ nghe qua Tailscale, không public ra internet.</li>
+                </ul>
+              </div>
+              <div class="card">
+                <h3><i data-lucide="info"></i> Cổng đang dùng trên roser</h3>
+                <div class="spec">
+                  <div class="row"><span class="k">S3 API</span><span class="v mono">:3900</span></div>
+                  <div class="row"><span class="k">RPC (nội bộ node)</span><span class="v mono">:3901</span></div>
+                  <div class="row"><span class="k">Admin API</span><span class="v mono">:3903</span></div>
+                  <div class="row"><span class="k">Web UI này</span><span class="v mono">:3910</span></div>
+                </div>
+                <p style="font-size:12.5px;color:var(--muted);margin:9px 0 0">File <span class="mono">garage.toml</span> và <span class="mono">.env</span> (quyền 600) giữ RPC Secret + Admin Token — không commit lên git, không gửi qua chat.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <footer class="foot">Garage Web UI — giao diện quản trị cho Garage v2.4.1 trên server roser</footer>
+      </main>
+    </div>
   </div>
 </div>
 
@@ -183,7 +305,7 @@
     <p id="bucketNameError" class="text-sm text-red-500 mt-1 hidden"></p>
     <div class="flex justify-end gap-2 mt-5">
       <button class="btn-secondary" onclick="closeDialog('bucketDialog')">Hủy</button>
-      <button class="btn-primary" onclick="createBucket()"><i data-lucide="plus" class="w-4 h-4"></i> Tạo bucket</button>
+      <button class="btn-primary" onclick="createBucket()"><i data-lucide="plus"></i> Tạo bucket</button>
     </div>
   </div>
 </div>
@@ -196,7 +318,7 @@
     <input id="newKeyName" class="input mt-4" placeholder="vd: app-key" maxlength="64" />
     <div class="flex justify-end gap-2 mt-5">
       <button class="btn-secondary" onclick="closeDialog('keyDialog')">Hủy</button>
-      <button class="btn-primary" onclick="createKey()"><i data-lucide="key-round" class="w-4 h-4"></i> Tạo key</button>
+      <button class="btn-primary" onclick="createKey()"><i data-lucide="key-round"></i> Tạo key</button>
     </div>
   </div>
 </div>
@@ -208,7 +330,7 @@
     <p class="text-sm text-slate-500 mt-1">Secret key sẽ không xem lại được nữa. Hãy sao chép và lưu vào nơi an toàn ngay bây giờ.</p>
     <div class="mt-4 space-y-3 text-sm">
       <div><label class="label">Key ID</label><div class="flex gap-2"><input id="secretKeyId" readonly class="input flex-1 font-mono" /><button class="btn-secondary" onclick="copyText('secretKeyId')">Sao chép</button></div></div>
-      <div><label class="label">Secret key</label><div class="flex gap-2"><input id="secretKeyValue" readonly class="input flex-1 font-mono" type="password" /><button class="btn-icon" onclick="toggleSecret()" title="Hiện / ẩn"><i data-lucide="eye" class="w-4 h-4"></i></button><button class="btn-secondary" onclick="copyText('secretKeyValue')">Sao chép</button></div></div>
+      <div><label class="label">Secret key</label><div class="flex gap-2"><input id="secretKeyValue" readonly class="input flex-1 font-mono" type="password" /><button class="btn-icon" onclick="toggleSecret()" title="Hiện / ẩn"><i data-lucide="eye"></i></button><button class="btn-secondary" onclick="copyText('secretKeyValue')">Sao chép</button></div></div>
     </div>
     <div class="flex justify-end gap-2 mt-5">
       <button class="btn-primary" onclick="closeDialog('secretDialog')">Tôi đã lưu xong</button>
@@ -250,14 +372,14 @@
   <div class="dialog-card !max-w-3xl">
     <div class="flex items-center justify-between gap-3">
       <h3 id="previewTitle" class="font-bold truncate"></h3>
-      <button class="btn-icon" onclick="closeDialog('previewDialog')"><i data-lucide="x" class="w-5 h-5"></i></button>
+      <button class="btn-icon" onclick="closeDialog('previewDialog')"><i data-lucide="x"></i></button>
     </div>
     <img id="previewImg" class="mt-4 max-h-[70vh] w-full object-contain rounded-lg bg-slate-100 dark:bg-slate-800" alt="Xem trước ảnh" />
     <p id="previewMeta" class="text-sm text-slate-500 mt-2"></p>
   </div>
 </div>
 
-<div id="toasts" class="fixed bottom-4 right-4 z-50 space-y-2 w-[calc(100%-2rem)] max-w-sm"></div>
+<div id="toasts"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>
